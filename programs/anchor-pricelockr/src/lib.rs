@@ -16,7 +16,6 @@ pub mod anchor_pricelockr {
         tournament.creator = ctx.accounts.creator.key();
         
         vault.bump = ctx.bumps.vault;
-        tournament.bump = ctx.bumps.tournament;
 
         tournament.price_claimed = false;
         tournament.contestants = vec![];
@@ -104,7 +103,6 @@ pub struct Contestants{
 #[account]
 pub struct Tournament{
     pub creator:Pubkey,
-    pub bump:u8,
     pub contestants: Vec<Contestants>,
     pub winner:Pubkey,
     pub price_claimed:bool,
@@ -120,10 +118,8 @@ pub struct Winner{
 pub struct Initialize <'info>{
     #[account(
         init,
-        seeds = [b"nft",creator.key().as_ref()],
         payer = creator,
-        space = 8 + 32 + 1 + 4 + (40*10) + 32 + 1 + 8,
-        bump
+        space = 8 + 32 + 1 + 4 + (40*10) + 32 + 1 + 8
     )]
     pub tournament:Account<'info,Tournament>,
     #[account(
