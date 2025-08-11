@@ -66,7 +66,8 @@ pub mod anchor_pricelockr {
     pub fn claim_reward(ctx: Context<ClaminPrice>) -> Result<()> {
         let tournament = &mut ctx.accounts.tournament;
         let winner = &mut ctx.accounts.winner;
-        winner.bump =ctx.bumps.winner;
+        winner.winner = tournament.winner;
+        winner.bump = ctx.bumps.winner;
         require!(tournament.winner != Pubkey::default(), CustomError::WinnerNotFound);
         require!(!tournament.price_claimed, CustomError::AlreadyClaimed);
         require_keys_eq!(ctx.accounts.user.key(), tournament.winner, CustomError::WinnerNotFound);
@@ -174,9 +175,11 @@ pub struct ClaminPrice<'info>{
     #[account(mut)]
     pub vault:Account<'info,Vault>,
     #[account(
-        mut,
+        init,
         seeds = [b"win",user.key().as_ref()],
-        bump
+        bump,
+        payer = user,
+        space = 8 + 32 + 1 
     )]
     pub winner:Account<'info,Winner>,
     ///CHECKS vault token account

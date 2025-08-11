@@ -1,10 +1,9 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorPricelockr } from "../target/types/anchor_pricelockr";
-import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import {
   createMint,
-  getAccount,
   getOrCreateAssociatedTokenAccount,
   mintTo,
   TOKEN_PROGRAM_ID,
@@ -21,11 +20,12 @@ describe("anchor-pricelockr", () => {
   let userAta: anchor.web3.PublicKey;
   let vaultAta: anchor.web3.PublicKey;
   let winnerAta: anchor.web3.PublicKey;
+  let contestantsKps: Keypair[] = [];
   const user = provider.wallet as anchor.Wallet;
   let vault: anchor.web3.PublicKey;
   let tournament: anchor.web3.PublicKey;
   let winner: anchor.web3.PublicKey;
-  let amount = new anchor.BN(1_000_000);
+  let amount = new anchor.BN(1_000_000_000);
   it("Is initialized!", async () => {
     mint = await createMint(
       provider.connection,
@@ -42,18 +42,7 @@ describe("anchor-pricelockr", () => {
       [Buffer.from("nft"), user.publicKey.toBuffer()],
       program.programId
     );
-    [winner] = await PublicKey.findProgramAddress(
-      [Buffer.from("win"), user.publicKey.toBuffer()],
-      program.programId
-    );
-    vaultAta = (
-      await getOrCreateAssociatedTokenAccount(
-        provider.connection,
-        user.payer,
-        mint,
-        user.publicKey
-      )
-    ).address;
+    // User ATA
     userAta = (
       await getOrCreateAssociatedTokenAccount(
         provider.connection,
@@ -62,12 +51,13 @@ describe("anchor-pricelockr", () => {
         user.publicKey
       )
     ).address;
-    winnerAta = (
+    vaultAta = (
       await getOrCreateAssociatedTokenAccount(
         provider.connection,
         user.payer,
         mint,
-        user.publicKey
+        vault,
+        true
       )
     ).address;
     const preUserBalance = await provider.connection.getTokenAccountBalance(
@@ -105,9 +95,11 @@ describe("anchor-pricelockr", () => {
   });
   it("Enroll Users", async () => {
     const randomPubkeys: PublicKey[] = [];
+    contestantsKps = [];
     for (let i = 0; i < 10; i++) {
-      const keyPairs = Keypair.generate();
-      randomPubkeys.push(keyPairs.publicKey);
+      const keyPair = Keypair.generate();
+      contestantsKps.push(keyPair);
+      randomPubkeys.push(keyPair.publicKey);
     }
     const tx = await program.methods
       .addContestants(randomPubkeys)
@@ -137,12 +129,34 @@ describe("anchor-pricelockr", () => {
     console.log("Winner: ", tournamentWinner.winner);
   });
   it("Claim Reward", async () => {
+    // Fetch on-chain winner and find matching keypair
+    const t = await program.account.tournament.fetch(tournament);
+    const winnerWallet = t.winner as PublicKey;
+    const winnerKp = contestantsKps.find((kp) => kp.publicKey.equals(winnerWallet));
+    if (!winnerKp) throw new Error("Winner keypair not found in contestants");
+
+    [winner] = await PublicKey.findProgramAddress(
+      [Buffer.from("win"), winnerWallet.toBuffer()],
+      program.programId
+    );
+
+    await provider.connection.requestAirdrop(winnerWallet, LAMPORTS_PER_SOL);
+
+    winnerAta = (
+      await getOrCreateAssociatedTokenAccount(
+        provider.connection,
+        user.payer,
+        mint,
+        winnerWallet
+      )
+    ).address;
+
     const tx = await program.methods
       .claimReward()
       .accounts({
         vault: vault,
         vaultAta: vaultAta,
-        user: user.publicKey,
+        user: winnerWallet,
         userAta: userAta,
         winner: winner,
         winnerAta: winnerAta,
@@ -150,6 +164,7 @@ describe("anchor-pricelockr", () => {
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
+      .signers([winnerKp])
       .rpc();
     const userBalance = await provider.connection.getTokenAccountBalance(
       userAta
@@ -157,11 +172,16 @@ describe("anchor-pricelockr", () => {
     const winnerBalance = await provider.connection.getTokenAccountBalance(
       winnerAta
     );
+    const vaultBalance = await provider.connection.getTokenAccountBalance(
+      vaultAta
+    );
     console.log("User Balance: ", userBalance.value.amount);
     console.log("Winner Balance: ", winnerBalance.value.amount);
+    console.log("Vault Balance: ", vaultBalance.value.amount);
 
-    expect(userBalance.value.amount).to.equal(0);
-    expect(winnerBalance.value.amount).to.equal(1_000_000_000);
+    expect(Number(userBalance.value.amount)).to.equal(0);
+    expect(Number(winnerBalance.value.amount)).to.equal(1_000_000_000);
+    expect(Number(vaultBalance.value.amount)).to.equal(0);
     expect(
       (await program.account.tournament.fetch(tournament)).priceClaimed
     ).to.equal(true);
