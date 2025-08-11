@@ -35,10 +35,7 @@ pub mod anchor_pricelockr {
     }
     pub fn tournament_result(ctx: Context<TournamentResult>) -> Result<()> {
         let tournament = &mut ctx.accounts.tournament;
-        let seed_data = [
-            ctx.accounts.user.key().as_ref(),
-        ].concat();
-        let hash = hash::hash(&seed_data);
+        let hash = hash::hash(ctx.accounts.user.key().as_ref());
         let rn_index = (hash.to_bytes()[0] as usize) % tournament.contestants.len();
         let winner = tournament.contestants[rn_index].wallet_address;
         tournament.winner = winner;
