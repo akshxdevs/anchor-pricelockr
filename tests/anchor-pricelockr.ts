@@ -1,7 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { AnchorPricelockr } from "../target/types/anchor_pricelockr";
-import { Keypair, PublicKey, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 import {
   createMint,
   getOrCreateAssociatedTokenAccount,
@@ -132,7 +137,9 @@ describe("anchor-pricelockr", () => {
     // Fetch on-chain winner and find matching keypair
     const t = await program.account.tournament.fetch(tournament);
     const winnerWallet = t.winner as PublicKey;
-    const winnerKp = contestantsKps.find((kp) => kp.publicKey.equals(winnerWallet));
+    const winnerKp = contestantsKps.find((kp) =>
+      kp.publicKey.equals(winnerWallet)
+    );
     if (!winnerKp) throw new Error("Winner keypair not found in contestants");
 
     [winner] = await PublicKey.findProgramAddress(
